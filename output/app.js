@@ -4,7 +4,9 @@
    Falls back gracefully if the server is still initializing.
    ═══════════════════════════════════════════════════════════ */
 
-const API_BASE       = 'http://localhost:5001';  // Flask backend — always explicit
+/* No API_BASE needed — data is baked into the page by Flask on load.
+   The dashboard reads window.__SKYGUARD__ and auto-reloads when the
+   next scheduled pipeline run completes. */
 const NCR_STATIONS   = ['AWS_DELHI','AWS_GURGAON','AWS_NOIDA'];
 const ISO_STATIONS   = ['AWS_KOCHI','AWS_BLR','AWS_SHIMLA','AWS_JAISALMER'];
 
@@ -48,118 +50,76 @@ function switchTab(name) {
 }
 
 /* ── DATA LOADING ───────────────────────────────────────── */
-async function triggerRefresh() {
-  const btn = document.getElementById('btn-refresh');
-  if (btn) {
-    btn.disabled = true;
-    btn.style.opacity = '0.5';
-    btn.innerHTML = '⏳ Fetching...';
+function loadData() {
+  // Flask bakes the current pipeline results into window.__SKYGUARD__
+  // before sending the HTML. We just read it — no fetch() needed.
+  const json = window.__SKYGUARD__;
+  window.__SKYGUARD__ = null;
+
+  if (!json) {
+    setStatus('error', '❌ No data — try refreshing the page');
+    return;
   }
 
-  const runUtcBefore = g_lastRunUtc;  // remember what we had before
-
-  try {
-    const res = await fetch(`${API_BASE}/api/refresh`, { method: 'POST' });
-    if (!res.ok && res.status !== 202) throw new Error('Server error');
-    setStatus('initializing', '⏳ Pipeline running...');
-    // Fast-poll until last_run_utc actually changes (new run finished)
-    pollUntilFresh(runUtcBefore);
-  } catch(e) {
-    console.error(e);
-    setStatus('error', '❌ Cannot reach server — is python3 server.py running?');
-    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = '🔄 Fetch Fresh Data'; }
+  if (json.status === 'initializing' || json.status === 'refreshing') {
+    setStatus('initializing', '⏳ Pipeline running for the first time (~60s)…');
+    // Poll the status endpoint every 3 s until the pipeline finishes,
+    // then reload the page to get the freshly baked data.
+    setTimeout(waitForReady, 3000);
+    return;
   }
-}
 
-async function pollUntilFresh(oldRunUtc) {
-  try {
-    const res  = await fetch(`${API_BASE}/api/status`);
-    const json = await res.json();
-    // Still running — come back in 2s
-    if (json.status === 'refreshing' || json.status === 'initializing' ||
-        json.last_run_utc === oldRunUtc) {
-      g_pollTimer = setTimeout(() => pollUntilFresh(oldRunUtc), 2000);
-      return;
+  if (json.status === 'error') {
+    setStatus('error', '❌ Pipeline error — ' + (json.message || 'check server logs'));
+    return;
+  }
+
+  // ── Happy path: render everything ────────────────────────────────
+  g_lastRunUtc = json.last_run_utc;
+  g_results    = json.detection_results || [];
+  g_health     = json.sensor_health     || [];
+  g_metrics    = json.evaluation_metrics || {};
+
+  const dr      = json.data_range || {};
+  const lastRun = json.last_run_utc ? new Date(json.last_run_utc).toLocaleString() : '—';
+  const nextRun = json.next_run_utc ? new Date(json.next_run_utc).toLocaleString() : '—';
+
+  setStatus('live', `🟢 Live · Updated ${lastRun}`);
+  document.getElementById('footer-timestamp').textContent =
+    `Data: ${dr.start ? dr.start.slice(0,10) : '?'} → ${dr.end ? dr.end.slice(0,10) : '?'} · Next auto-refresh: ${nextRun}`;
+
+  renderOverview();
+  buildStationSidebar();
+  renderExplainability();
+  if (g_currentStation) selectStation(g_currentStation);
+
+  // Schedule an automatic page reload when the next pipeline run is due.
+  // This means the dashboard updates itself without any user action.
+  if (json.next_run_utc) {
+    const msUntilNext = new Date(json.next_run_utc) - Date.now() + 10_000; // +10s buffer
+    if (msUntilNext > 0 && msUntilNext < 8 * 3600 * 1000) {
+      setTimeout(() => window.location.reload(), msUntilNext);
     }
-    // Fresh data is ready — do a full loadData() to re-render everything
-    loadData();
-  } catch(e) {
-    g_pollTimer = setTimeout(() => pollUntilFresh(oldRunUtc), 3000);
   }
 }
 
-
-async function loadData() {
+async function waitForReady() {
+  // Called only during the first-run initializing state.
+  // Polls /api/status (same-origin, no CORS) until ready, then reloads.
   try {
-    let json;
-
-    // ── Fast path: Flask injects data directly into the page ──
-    // window.__SKYGUARD__ is set by the server before app.js runs,
-    // so this works with zero fetch() calls, zero CORS issues.
-    if (window.__SKYGUARD__) {
-      json = window.__SKYGUARD__;
-      window.__SKYGUARD__ = null;
+    const res  = await fetch('/api/status');
+    const data = await res.json();
+    if (data.status === 'ready') {
+      window.location.reload();
     } else {
-      // ── Fallback: poll the API ────────────────────────────
-      const res = await fetch(`${API_BASE}/api/data`);
-      json = await res.json();
+      setTimeout(waitForReady, 3000);
     }
-
-    // ── Handle server states ────────────────────────────────
-    if (json.status === 'initializing' || json.status === 'refreshing') {
-      setStatus('initializing', '⏳ Pipeline running...');
-      g_pollTimer = setTimeout(loadData, 2000);
-      return;
-    }
-    if (json.status === 'error') {
-      setStatus('error', '❌ ' + (json.message || json.error || 'Server error'));
-      const btn = document.getElementById('btn-refresh');
-      if (btn) {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5l1.75 1.93"></path></svg> Fetch Fresh Data';
-      }
-      return;
-    }
-
-    // Only re-render if the data actually changed (avoid unnecessary redraws)
-    if (json.last_run_utc === g_lastRunUtc && g_results.length > 0) {
-      return;
-    }
-
-    g_lastRunUtc = json.last_run_utc;
-    g_results    = json.detection_results || [];
-    g_health     = json.sensor_health     || [];
-    g_metrics    = json.evaluation_metrics || {};
-
-    const dr      = json.data_range || {};
-    const lastRun = json.last_run_utc ? new Date(json.last_run_utc).toLocaleString() : '—';
-    const nextRun = json.next_run_utc ? new Date(json.next_run_utc).toLocaleString() : '—';
-
-    setStatus('live', `🟢 Live · Updated ${lastRun}`);
-    document.getElementById('footer-timestamp').textContent =
-      `Data: ${dr.start ? dr.start.slice(0,10) : '?'} → ${dr.end ? dr.end.slice(0,10) : '?'} · Next refresh: ${nextRun}`;
-
-    renderOverview();
-    buildStationSidebar();
-    renderExplainability();
-
-    if (g_currentStation) selectStation(g_currentStation);
-
-    // Re-enable the refresh button
-    const btn = document.getElementById('btn-refresh');
-    if (btn) {
-      btn.disabled = false;
-      btn.style.opacity = '1';
-      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5l1.75 1.93"></path></svg> Fetch Fresh Data';
-    }
-
   } catch(e) {
-    setStatus('error', '❌ Cannot reach server');
-    console.error(e);
-    g_pollTimer = setTimeout(loadData, 8000);
+    // Server may still be starting — try again in 5s
+    setTimeout(waitForReady, 5000);
   }
 }
+
 
 function setStatus(type, text) {
   const pill = document.getElementById('data-status');

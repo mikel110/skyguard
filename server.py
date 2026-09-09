@@ -39,7 +39,10 @@ INJECT_ANOMALIES = True           # keep True so evaluation metrics stay meaning
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "output")
 
 app = Flask(__name__, static_folder=STATIC_DIR)
-CORS(app)  # allow the browser to call /api/* from any origin
+# Allow all origins — necessary for the browser to call /api/refresh (POST) from
+# the same localhost page. The wildcard is safe because this server only binds
+# to localhost in dev; on Render it binds to the Render-assigned public URL.
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # ── Shared state (written by background thread, read by request handlers) ────
 _state_lock = threading.Lock()
@@ -161,13 +164,16 @@ def _compute_metrics(results):
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.route("/api/refresh", methods=["POST"])
 def api_refresh():
-    """Manually trigger a pipeline run."""
+    """Manually trigger a pipeline run in a background thread.
+    Returns 202 immediately whether the pipeline starts fresh or was already
+    running — the client just polls /api/data until last_run_utc changes.
+    """
     with _state_lock:
-        if _state["status"] == "refreshing":
-            return jsonify({"status": "error", "message": "Already refreshing"}), 429
+        already_running = _state["status"] == "refreshing"
     
-    # Run in background so we don't block the HTTP response
-    threading.Thread(target=_run_pipeline, daemon=True).start()
+    if not already_running:
+        threading.Thread(target=_run_pipeline, daemon=True).start()
+    
     return jsonify({"status": "ok", "message": "Refresh started"}), 202
 
 @app.route("/")

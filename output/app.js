@@ -55,17 +55,39 @@ async function triggerRefresh() {
     btn.style.opacity = '0.5';
     btn.innerHTML = '⏳ Fetching...';
   }
-  
+
+  const runUtcBefore = g_lastRunUtc;  // remember what we had before
+
   try {
-    await fetch(`${API_BASE}/api/refresh`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/api/refresh`, { method: 'POST' });
+    if (!res.ok && res.status !== 202) throw new Error('Server error');
     setStatus('initializing', '⏳ Pipeline running...');
-    // Start fast-polling until the server finishes the refresh
-    g_pollTimer = setTimeout(loadData, 2000);
+    // Fast-poll until last_run_utc actually changes (new run finished)
+    pollUntilFresh(runUtcBefore);
   } catch(e) {
     console.error(e);
-    setStatus('error', '❌ Cannot reach server');
+    setStatus('error', '❌ Cannot reach server — is python3 server.py running?');
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = '🔄 Fetch Fresh Data'; }
   }
 }
+
+async function pollUntilFresh(oldRunUtc) {
+  try {
+    const res  = await fetch(`${API_BASE}/api/status`);
+    const json = await res.json();
+    // Still running — come back in 2s
+    if (json.status === 'refreshing' || json.status === 'initializing' ||
+        json.last_run_utc === oldRunUtc) {
+      g_pollTimer = setTimeout(() => pollUntilFresh(oldRunUtc), 2000);
+      return;
+    }
+    // Fresh data is ready — do a full loadData() to re-render everything
+    loadData();
+  } catch(e) {
+    g_pollTimer = setTimeout(() => pollUntilFresh(oldRunUtc), 3000);
+  }
+}
+
 
 async function loadData() {
   try {

@@ -56,7 +56,6 @@ class MultivariateAnomalyDetector:
             contamination=contamination,
             n_estimators=n_estimators,
             random_state=random_state,
-            n_jobs=-1,
         )
         self.feature_medians_ = None
         self.fitted = False

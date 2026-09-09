@@ -28,12 +28,9 @@ import pandas as pd
 
 
 def temporal_correction(df, param, window=24):
-    """Median of nearby *non-flagged* observations, falling back to a
-    linear interpolation across the gap if the whole window is flagged."""
+    """Linearly interpolate across flagged observations."""
     clean = df[param].where(~df["is_flagged"])
-    est = clean.rolling(window, min_periods=3, center=True).median()
-    fallback = clean.interpolate(method="linear", limit_direction="both")
-    return est.fillna(fallback)
+    return clean.interpolate(method="linear", limit_direction="both")
 
 
 def spatial_correction(network_df, station_id, param, neighbor_ids=None,

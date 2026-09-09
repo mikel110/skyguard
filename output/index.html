@@ -138,11 +138,11 @@
     </div>
   </div>
 
-  <!-- ═══════════════════ TAB 3: AI EXPLAINABILITY ═══════════════════ -->
+  <!-- ═════════════════ TAB 3: AI EXPLAINABILITY ═════════════════ -->
   <div class="tab-content" id="content-explainability">
     <div class="explain-layout">
 
-      <!-- Pipeline Flowchart -->
+      <!-- Pipeline Flowchart (left column) -->
       <div class="glass-card explain-flow">
         <h3 class="card-title">🔬 7-Layer Detection Pipeline</h3>
         <div class="pipeline-flow">
@@ -155,43 +155,49 @@
           <div class="pipe-step step-rule">
             <div class="pipe-icon">📏</div>
             <div class="pipe-label">Layer 1 · Physical Range</div>
-            <div class="pipe-sub">−40°C to 60°C | 870–1085 hPa</div>
+            <div class="pipe-sub">−40°C to 60°C | 870–1085 hPa · weight 1.0</div>
           </div>
           <div class="pipe-arrow">↓</div>
           <div class="pipe-step step-rule">
             <div class="pipe-icon">⚡</div>
             <div class="pipe-label">Layer 2 · Spike Detector</div>
-            <div class="pipe-sub">Rate-of-change > physical max</div>
+            <div class="pipe-sub">MAD-robust rate-of-change · weight 0.55</div>
           </div>
           <div class="pipe-arrow">↓</div>
           <div class="pipe-step step-rule">
             <div class="pipe-icon">🥶</div>
             <div class="pipe-label">Layer 3 · Frozen Sensor</div>
-            <div class="pipe-sub">Value unchanged for 40+ min</div>
+            <div class="pipe-sub">Value unchanged for 40+ min · weight 0.85</div>
           </div>
           <div class="pipe-arrow">↓</div>
           <div class="pipe-step step-rule">
             <div class="pipe-icon">📉</div>
             <div class="pipe-label">Layer 4 · Drift Check</div>
-            <div class="pipe-sub">Sustained deviation from climatology</div>
+            <div class="pipe-sub">24h rolling z-score deviation · weight 0.35</div>
+          </div>
+          <div class="pipe-arrow">↓</div>
+          <div class="pipe-step step-rule">
+            <div class="pipe-icon">🌡️</div>
+            <div class="pipe-label">Layer 5 · Physics Check</div>
+            <div class="pipe-sub">Dew point &gt; temp, joint pressure-humidity spikes · weight 0.55</div>
           </div>
           <div class="pipe-arrow">↓</div>
           <div class="pipe-step step-ml">
             <div class="pipe-icon">🤖</div>
-            <div class="pipe-label">Layer 5 · Isolation Forest</div>
-            <div class="pipe-sub">Multivariate anomaly (7 features)</div>
+            <div class="pipe-label">Layer 6 · Isolation Forest</div>
+            <div class="pipe-sub">7-feature ML · no labels needed · weight 0.45</div>
           </div>
           <div class="pipe-arrow">↓</div>
           <div class="pipe-step step-spatial">
             <div class="pipe-icon">🗺️</div>
-            <div class="pipe-label">Layer 6 · Spatial Consistency</div>
-            <div class="pipe-sub">Compare Delhi / Gurgaon / Noida cluster</div>
+            <div class="pipe-label">Layer 7 · Spatial Consistency</div>
+            <div class="pipe-sub">NCR cluster only (Delhi/Gurgaon/Noida) · weight 0.65</div>
           </div>
           <div class="pipe-arrow">↓</div>
           <div class="pipe-step step-fusion">
             <div class="pipe-icon">⚖️</div>
-            <div class="pipe-label">Layer 7 · Evidence Fusion</div>
-            <div class="pipe-sub">Weighted confidence → Severity</div>
+            <div class="pipe-label">Evidence Fusion</div>
+            <div class="pipe-sub">Weighted sum → Severity → Confidence</div>
           </div>
           <div class="pipe-arrow">↓</div>
           <div class="pipe-step step-output">
@@ -202,29 +208,45 @@
         </div>
       </div>
 
-      <!-- Explainability Panel -->
+      <!-- Right column -->
       <div class="explain-right">
+
+        <!-- Section A: Top Significant Alerts -->
         <div class="glass-card" style="margin-bottom:16px">
-          <h3 class="card-title">🔎 Occlusion-Based Feature Attribution</h3>
-          <p class="explain-prose">
-            When the <strong>Isolation Forest</strong> flags a reading, it returns only a score.
-            SkyGuard then asks a series of <em>"What if I remove this feature?"</em> questions —
-            measuring how much the anomaly score drops when each feature is reset to its local median.
-            A large drop = that feature is <strong>causing</strong> the anomaly.
-            No SHAP library required — edge-deployable on a Raspberry Pi.
+          <h3 class="card-title">🔊 Top Anomalies — Medium+ Severity</h3>
+          <p class="explain-prose" style="margin-bottom:12px">
+            Showing the highest-scoring anomalies with the <strong>exact reasoning</strong> produced by
+            the 7-layer pipeline. Each bullet is a specific detector that fired and why.
           </p>
-          <div id="chart-attribution" style="height:260px"></div>
+          <div id="top-alerts-box">Loading...</div>
         </div>
 
-        <div class="glass-card">
-          <h3 class="card-title">📋 Worst Anomaly Breakdown</h3>
+        <!-- Section B: Detection Layer Breakdown -->
+        <div class="glass-card" style="margin-bottom:16px">
+          <h3 class="card-title">📊 Detection Layer Breakdown (Worst Alert)</h3>
+          <p class="explain-prose" style="margin-bottom:8px">
+            Real scores from every detection layer for the highest-scoring anomaly.
+            Each bar = raw detector score &times; fusion weight. Taller bar = stronger evidence.
+          </p>
+          <div id="chart-attribution" style="height:270px"></div>
+        </div>
+
+        <!-- Section C: Worst Anomaly Deep Dive -->
+        <div class="glass-card" style="margin-bottom:16px">
+          <h3 class="card-title">📋 Worst Anomaly Deep Dive</h3>
           <div class="explain-prose" id="worst-anomaly-box">Loading...</div>
         </div>
 
-        <div class="glass-card" style="margin-top:16px">
-          <h3 class="card-title">📈 Detection Performance</h3>
+        <!-- Section D: Evaluation Metrics -->
+        <div class="glass-card">
+          <h3 class="card-title">📈 Detection Performance Metrics</h3>
+          <p class="explain-prose" style="margin-bottom:12px">
+            Evaluated against labeled ground truth (injected anomalies). Tier 1 = any flag;
+            Tier 2 = Medium/High/Critical severity confirmed alerts.
+          </p>
           <div class="metrics-grid" id="metrics-grid"></div>
         </div>
+
       </div>
     </div>
   </div>

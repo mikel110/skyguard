@@ -120,7 +120,15 @@ def _run_pipeline():
             "pressure",    "pressure_corrected",
             "humidity",    "humidity_corrected",
             "anomaly_score", "confidence", "severity",
-            "root_cause_label", "is_flagged", "is_anomaly", "anomaly_type",
+            "root_cause_label", "root_cause", "explanation",
+            "is_flagged", "is_anomaly", "anomaly_type",
+            # Per-layer detector scores (power the real attribution chart)
+            "range_temperature", "range_pressure", "range_humidity",
+            "rate_temperature",  "rate_pressure",  "rate_humidity",
+            "frozen_temperature","frozen_pressure", "frozen_humidity",
+            "zscore_temperature","zscore_pressure", "zscore_humidity",
+            "multivariate_score", "ml_score", "spatial_score",
+            "dew_point",
         ] if c in results.columns]
 
         results_list = results[export_cols].assign(

@@ -196,7 +196,16 @@ class AnomalyInjector:
 
         if kind == "spike":
             param = self.rng.choice(["temperature", "pressure", "humidity"])
-            magnitude = {"temperature": 25, "pressure": 30, "humidity": 60}[param]
+            # Scale magnitude relative to the station's own typical range so
+            # a +25°C spike doesn't dominate a high-altitude station where the
+            # entire diurnal range is only 8°C (Shimla, Bangalore, etc.).
+            baseline = df.loc[span, param].median()
+            std_est  = df.loc[span[0] - min(30, span[0]) : span[0], param].std() + 1.0
+            magnitude = {
+                "temperature": max(8.0,  3.0 * std_est),
+                "pressure":    max(10.0, 3.0 * std_est),
+                "humidity":    max(25.0, 3.0 * std_est),
+            }[param]
             direction = self.rng.choice([-1, 1])
             df.loc[span, param] += direction * magnitude
 

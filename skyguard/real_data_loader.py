@@ -1,17 +1,18 @@
 import pandas as pd
 import requests
 import time
+import numpy as np
 from datetime import datetime, timezone
 
 # Use the same 7 stations from the simulator to maintain spatial consistency logic
 STATIONS = [
-    {"id": "AWS_DELHI",    "lat": 28.61, "lon": 77.20},
-    {"id": "AWS_GURGAON",  "lat": 28.46, "lon": 77.03},
-    {"id": "AWS_NOIDA",    "lat": 28.53, "lon": 77.39},
-    {"id": "AWS_KOCHI",    "lat": 9.93,  "lon": 76.26},
-    {"id": "AWS_BLR",      "lat": 12.97, "lon": 77.59},
-    {"id": "AWS_SHIMLA",   "lat": 31.10, "lon": 77.17},
-    {"id": "AWS_JAISALMER","lat": 26.91, "lon": 70.90},
+    {"id": "AWS_DELHI",     "lat": 28.61, "lon": 77.20, "alt": 216},
+    {"id": "AWS_GURGAON",   "lat": 28.46, "lon": 77.03, "alt": 217},
+    {"id": "AWS_NOIDA",     "lat": 28.53, "lon": 77.39, "alt": 200},
+    {"id": "AWS_KOCHI",     "lat": 9.93,  "lon": 76.26, "alt": 3},
+    {"id": "AWS_BLR",       "lat": 12.97, "lon": 77.59, "alt": 920},
+    {"id": "AWS_SHIMLA",    "lat": 31.10, "lon": 77.17, "alt": 2200},
+    {"id": "AWS_JAISALMER", "lat": 26.91, "lon": 70.90, "alt": 225},
 ]
 
 def fetch_open_meteo_data(past_days=10):
@@ -45,17 +46,33 @@ def fetch_open_meteo_data(past_days=10):
             humidities = hourly["relative_humidity_2m"]
             pressures = hourly["surface_pressure"]
             
+            # Station altitude for MSLP conversion
+            altitude_m = station.get("alt", 0)
+
             df_station = pd.DataFrame({
                 "timestamp": times,
                 "station_id": station["id"],
                 "latitude": station["lat"],
                 "longitude": station["lon"],
                 "temperature": temps,
-                "pressure": pressures,
+                "pressure": pressures,  # still surface pressure here
                 "humidity": humidities,
                 "is_anomaly": False,
                 "anomaly_type": "none"
             })
+
+            # ── Convert surface pressure → MSLP ─────────────────────────────
+            # All real AWS networks transmit pressure reduced to Mean Sea Level
+            # so readings are directly comparable across stations at different
+            # altitudes. The barometric formula:
+            #   MSLP ≈ P_station * exp(g * h / (R_d * T_avg))
+            # where T_avg is temperature in Kelvin. This matches the
+            # standard IMD / WMO reduction used on real AWS networks.
+            if altitude_m > 0:
+                T_k = df_station["temperature"] + 273.15
+                df_station["pressure"] = df_station["pressure"] * np.exp(
+                    9.80665 * altitude_m / (287.05 * T_k)
+                )
             
             all_data.append(df_station)
             

@@ -29,10 +29,10 @@ import pandas as pd
 
 def temporal_correction(df, param, window=24):
     """Median of nearby *non-flagged* observations, falling back to a
-    rolling median of all observations if the whole window is flagged."""
+    linear interpolation across the gap if the whole window is flagged."""
     clean = df[param].where(~df["is_flagged"])
     est = clean.rolling(window, min_periods=3, center=True).median()
-    fallback = df[param].rolling(window, min_periods=1, center=True).median()
+    fallback = clean.interpolate(method="linear", limit_direction="both")
     return est.fillna(fallback)
 
 

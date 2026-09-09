@@ -306,18 +306,32 @@ function selectStation(sid) {
   const ts     = rows.map(r => r.timestamp);
   const flagTs = flagged.map(r => r.timestamp);
 
+  const safeNum = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+
   const makeTraces = (raw, corr, name, color, chartId, h) => {
     Plotly.newPlot(chartId, [
-      { x:ts, y:rows.map(r => parseFloat(r[raw])), name, mode:'lines',
+      { x:ts, y:rows.map(r => safeNum(r[raw])), name, mode:'lines',
         line:{ color, width:1.5 },
         hovertemplate:`%{x}<br><b>${name}:</b> %{y:.1f}<extra></extra>` },
-      { x:ts, y:rows.map(r => parseFloat(r[corr])), name:'Corrected', mode:'lines',
+      { x:ts, y:rows.map(r => safeNum(r[corr])), name:'Corrected', mode:'lines',
         line:{ color:'#34d399', width:1, dash:'dot' }, opacity:0.7,
         hovertemplate:`%{x}<br><b>Corrected:</b> %{y:.1f}<extra></extra>` },
-      { x:flagTs, y:flagged.map(r => parseFloat(r[raw])), name:'Flagged ❌', mode:'markers',
+      { x:flagTs, y:flagged.map(r => safeNum(r[raw])), name:'Flagged ❌', mode:'markers',
         marker:{ color:'#f87171', size:7, symbol:'x' },
         hovertemplate:`%{x}<br><b>ALERT:</b> %{y:.1f}<extra></extra>` },
-    ], { ...PLOTLY_DARK, height:h }, { responsive:true, displayModeBar:false });
+    ], { ...PLOTLY_DARK, height:h, yaxis:{ ...PLOTLY_DARK.yaxis, type: 'linear' } }, { responsive:true, displayModeBar:false });
+    
+    // Add click listener to explain any point
+    const chart = document.getElementById(chartId);
+    chart.on('plotly_click', function(data) {
+      if (!data.points || !data.points[0]) return;
+      const clickedTs = data.points[0].x;
+      const row = rows.find(r => r.timestamp === clickedTs);
+      if (row) {
+        switchTab('explainability');
+        renderAnomaly(row);
+      }
+    });
   };
 
   makeTraces('temperature','temperature_corrected','Temperature (°C)','#5b8df8','chart-temp',260);
@@ -354,7 +368,7 @@ function selectStation(sid) {
 function renderExplainability() {
   renderTopAlerts();
   renderLayerBreakdown();
-  renderWorstAnomaly();
+  renderAnomaly();
   renderMetricsGrid();
 }
 
@@ -445,12 +459,18 @@ function renderLayerBreakdown() {
   }, { responsive:true, displayModeBar:false });
 }
 
-function renderWorstAnomaly() {
-  const flagged = g_results.filter(r => r.is_flagged)
-    .sort((a,b) => b.anomaly_score - a.anomaly_score);
+function renderAnomaly(t = null) {
+  if (!t) {
+    const flagged = g_results.filter(r => r.is_flagged)
+      .sort((a,b) => b.anomaly_score - a.anomaly_score);
+    if (!flagged.length) { 
+      el('worst-anomaly-box').innerHTML = 'No anomalies found.'; 
+      return; 
+    }
+    t = flagged[0];
+  }
+
   const box = el('worst-anomaly-box');
-  if (!flagged.length) { box.innerHTML = 'No flagged anomalies found.'; return; }
-  const t = flagged[0];
   const sevColor = t.severity==='Critical'?'#f87171':t.severity==='High'?'#fbbf24':
     t.severity==='Medium'?'#38bdf8':'#9ca3af';
   const confPct = t.confidence ? Math.round(parseFloat(t.confidence)*100) + '%' : '—';

@@ -45,7 +45,7 @@ from sklearn.metrics import precision_score, recall_score, f1_score, confusion_m
 # ── Configuration ─────────────────────────────────────────────────────────────
 REFRESH_INTERVAL_HOURS = 1     # pipeline re-runs every N hours automatically
 PAST_DAYS              = 10    # days of Open-Meteo history to load
-INJECT_ANOMALIES       = True  # inject synthetic faults for evaluation metrics
+INJECT_ANOMALIES       = False  # inject synthetic faults for evaluation metrics
 CACHE_FILE             = os.path.join(os.path.dirname(__file__), "output", "_cache.json")
 STATIC_DIR             = os.path.join(os.path.dirname(__file__), "output")
 

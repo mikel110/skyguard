@@ -1,8 +1,8 @@
 station_id,current_anomaly_rate,health_status,estimated_days_to_maintenance,total_flagged_observations,total_observations
-AWS_GURGAON,0.3376,Degraded - schedule maintenance soon,0.2,86,250
-AWS_DELHI,0.318,Degraded - schedule maintenance soon,0.7,75,250
-AWS_NOIDA,0.286,Degraded - schedule maintenance soon,1.3,69,250
-AWS_KOCHI,0.2815,Degraded - schedule maintenance soon,1.8,71,250
-AWS_SHIMLA,0.2315,Degraded - schedule maintenance soon,7.2,57,250
-AWS_JAISALMER,0.1476,"Watch - elevated anomaly rate, monitor",7.2,45,250
-AWS_BLR,0.1247,"Watch - elevated anomaly rate, monitor",15.7,44,250
+AWS_SHIMLA,0.2173,Degraded - schedule maintenance soon,82.4,50,250
+AWS_GURGAON,0.1625,"Watch - elevated anomaly rate, monitor",14.7,40,250
+AWS_NOIDA,0.1438,"Watch - elevated anomaly rate, monitor",23.0,30,250
+AWS_DELHI,0.1124,"Watch - elevated anomaly rate, monitor",34.1,28,250
+AWS_KOCHI,0.1056,"Watch - elevated anomaly rate, monitor",31.1,19,250
+AWS_JAISALMER,0.0897,"Watch - elevated anomaly rate, monitor",28.6,19,250
+AWS_BLR,0.0859,"Watch - elevated anomaly rate, monitor",32.9,20,250

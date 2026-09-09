@@ -158,14 +158,18 @@ def _compute_metrics(results):
     }
 
 
-# ── Background refresh loop ───────────────────────────────────────────────────
-def _refresh_loop():
-    while True:
-        _run_pipeline()
-        time.sleep(REFRESH_INTERVAL_HOURS * 3600)
-
-
 # ── Routes ────────────────────────────────────────────────────────────────────
+@app.route("/api/refresh", methods=["POST"])
+def api_refresh():
+    """Manually trigger a pipeline run."""
+    with _state_lock:
+        if _state["status"] == "refreshing":
+            return jsonify({"status": "error", "message": "Already refreshing"}), 429
+    
+    # Run in background so we don't block the HTTP response
+    threading.Thread(target=_run_pipeline, daemon=True).start()
+    return jsonify({"status": "ok", "message": "Refresh started"}), 202
+
 @app.route("/")
 def index():
     """Serve index.html with the current pipeline data injected as an inline
@@ -228,13 +232,13 @@ def api_data():
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    # Kick off the pipeline immediately in a daemon thread
-    t = threading.Thread(target=_refresh_loop, daemon=True)
+    # Kick off an initial pipeline run so the dashboard has data on first load
+    t = threading.Thread(target=_run_pipeline, daemon=True)
     t.start()
 
     print("=" * 60)
     print("  SkyGuard AI — Live Backend")
     print("  http://localhost:5001")
-    print(f"  Data refresh every {REFRESH_INTERVAL_HOURS}h  |  past_days={PAST_DAYS}")
+    print(f"  Manual refresh mode | past_days={PAST_DAYS}")
     print("=" * 60)
     app.run(host="0.0.0.0", port=5001, debug=False, use_reloader=False)

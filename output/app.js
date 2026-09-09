@@ -5,7 +5,6 @@
    ═══════════════════════════════════════════════════════════ */
 
 const API_BASE       = 'http://localhost:5001';  // Flask backend — always explicit
-const POLL_INTERVAL  = 60_000;                   // re-check every 60 s for new data
 const NCR_STATIONS   = ['AWS_DELHI','AWS_GURGAON','AWS_NOIDA'];
 const ISO_STATIONS   = ['AWS_KOCHI','AWS_BLR','AWS_SHIMLA','AWS_JAISALMER'];
 
@@ -49,6 +48,25 @@ function switchTab(name) {
 }
 
 /* ── DATA LOADING ───────────────────────────────────────── */
+async function triggerRefresh() {
+  const btn = document.getElementById('btn-refresh');
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.innerHTML = '⏳ Fetching...';
+  }
+  
+  try {
+    await fetch(`${API_BASE}/api/refresh`, { method: 'POST' });
+    setStatus('initializing', '⏳ Pipeline running...');
+    // Start fast-polling until the server finishes the refresh
+    g_pollTimer = setTimeout(loadData, 2000);
+  } catch(e) {
+    console.error(e);
+    setStatus('error', '❌ Cannot reach server');
+  }
+}
+
 async function loadData() {
   try {
     let json;
@@ -66,20 +84,24 @@ async function loadData() {
     }
 
     // ── Handle server states ────────────────────────────────
-    if (json.status === 'initializing') {
-      setStatus('initializing', '⏳ Pipeline running… ~60s');
-      g_pollTimer = setTimeout(loadData, 5000);
+    if (json.status === 'initializing' || json.status === 'refreshing') {
+      setStatus('initializing', '⏳ Pipeline running...');
+      g_pollTimer = setTimeout(loadData, 2000);
       return;
     }
     if (json.status === 'error') {
       setStatus('error', '❌ ' + (json.message || json.error || 'Server error'));
-      g_pollTimer = setTimeout(loadData, 8000);
+      const btn = document.getElementById('btn-refresh');
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5l1.75 1.93"></path></svg> Fetch Fresh Data';
+      }
       return;
     }
 
     // Only re-render if the data actually changed (avoid unnecessary redraws)
     if (json.last_run_utc === g_lastRunUtc && g_results.length > 0) {
-      scheduleNextPoll();
       return;
     }
 
@@ -102,17 +124,19 @@ async function loadData() {
 
     if (g_currentStation) selectStation(g_currentStation);
 
-    scheduleNextPoll();
+    // Re-enable the refresh button
+    const btn = document.getElementById('btn-refresh');
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.5l1.75 1.93"></path></svg> Fetch Fresh Data';
+    }
+
   } catch(e) {
     setStatus('error', '❌ Cannot reach server');
     console.error(e);
     g_pollTimer = setTimeout(loadData, 8000);
   }
-}
-
-function scheduleNextPoll() {
-  clearTimeout(g_pollTimer);
-  g_pollTimer = setTimeout(loadData, POLL_INTERVAL);
 }
 
 function setStatus(type, text) {

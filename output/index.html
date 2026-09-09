@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkyGuard AI — Real-Time AWS Anomaly Detection</title>
+  <meta name="description" content="SkyGuard AI: 7-layer anomaly detection pipeline for Automatic Weather Stations across India, powered by Isolation Forest and spatial consistency checks."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+  <!-- ═══════════════════ HEADER ═══════════════════ -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo-group">
+        <div class="logo-icon">⛅</div>
+        <div>
+          <h1 class="site-title">SkyGuard <span class="accent">AI</span></h1>
+          <p class="site-subtitle">Real-Time AWS Anomaly Detection · Open-Meteo Data</p>
+        </div>
+      </div>
+      <div class="header-meta">
+        <div class="status-pill" id="data-status">
+          <span class="pulse-dot"></span>
+          <span id="data-status-text">⏳ Connecting...</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ NAVIGATION TABS ═══════════════════ -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" id="tab-overview" onclick="switchTab('overview')">
+      <span class="tab-icon">🌐</span> Network Overview
+    </button>
+    <button class="tab-btn" id="tab-station" onclick="switchTab('station')">
+      <span class="tab-icon">📡</span> Station Deep-Dive
+    </button>
+    <button class="tab-btn" id="tab-explainability" onclick="switchTab('explainability')">
+      <span class="tab-icon">🧠</span> AI Explainability
+    </button>
+  </nav>
+
+  <!-- ═══════════════════ TAB 1: OVERVIEW ═══════════════════ -->
+  <div class="tab-content active" id="content-overview">
+
+    <!-- KPI Cards -->
+    <section class="kpi-row">
+      <div class="kpi-card" id="kpi-total">
+        <div class="kpi-icon">📊</div>
+        <div class="kpi-value" id="kpi-total-val">—</div>
+        <div class="kpi-label">Total Observations</div>
+        <div class="kpi-sub">10 days · 7 stations</div>
+      </div>
+      <div class="kpi-card danger" id="kpi-anomalies">
+        <div class="kpi-icon">⚠️</div>
+        <div class="kpi-value" id="kpi-anomalies-val">—</div>
+        <div class="kpi-label">Anomalies Detected</div>
+        <div class="kpi-sub" id="kpi-anomalies-pct">—</div>
+      </div>
+      <div class="kpi-card success" id="kpi-precision">
+        <div class="kpi-icon">🎯</div>
+        <div class="kpi-value" id="kpi-precision-val">—</div>
+        <div class="kpi-label">Tier 2 Precision</div>
+        <div class="kpi-sub">Confirmed alerts only</div>
+      </div>
+      <div class="kpi-card info" id="kpi-far">
+        <div class="kpi-icon">🔕</div>
+        <div class="kpi-value" id="kpi-far-val">—</div>
+        <div class="kpi-label">False Alarm Rate</div>
+        <div class="kpi-sub">Tier 2 (Medium+)</div>
+      </div>
+    </section>
+
+    <!-- Charts Row -->
+    <div class="charts-row">
+      <div class="glass-card chart-half">
+        <h3 class="card-title">Root Cause Distribution</h3>
+        <div id="chart-root-cause"></div>
+      </div>
+      <div class="glass-card chart-half">
+        <h3 class="card-title">Sensor Health Leaderboard</h3>
+        <div id="chart-health"></div>
+      </div>
+    </div>
+
+    <!-- Alert Feed -->
+    <div class="glass-card">
+      <div class="card-header-row">
+        <h3 class="card-title">🔴 Live Alert Feed</h3>
+        <span class="badge-count" id="alert-count-badge">—</span>
+      </div>
+      <div class="alert-feed" id="alert-feed"></div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════ TAB 2: STATION DEEP-DIVE ═══════════════════ -->
+  <div class="tab-content" id="content-station">
+    <div class="station-layout">
+      <!-- Sidebar -->
+      <aside class="station-sidebar">
+        <h3 class="sidebar-title">📡 Stations</h3>
+        <div class="station-group-label">Delhi NCR Cluster</div>
+        <div class="station-list" id="station-list-ncr"></div>
+        <div class="station-group-label" style="margin-top:12px">Isolated Stations</div>
+        <div class="station-list" id="station-list-iso"></div>
+      </aside>
+
+      <!-- Charts -->
+      <div class="station-main">
+        <div class="glass-card" style="margin-bottom:16px">
+          <h3 class="card-title" id="station-chart-title">Select a station →</h3>
+          <div id="chart-temp" style="height:280px"></div>
+        </div>
+        <div class="charts-row">
+          <div class="glass-card chart-half">
+            <h3 class="card-title">Pressure (hPa)</h3>
+            <div id="chart-pressure" style="height:220px"></div>
+          </div>
+          <div class="glass-card chart-half">
+            <h3 class="card-title">Humidity (%)</h3>
+            <div id="chart-humidity" style="height:220px"></div>
+          </div>
+        </div>
+        <div class="glass-card">
+          <h3 class="card-title">Fused Anomaly Score</h3>
+          <div id="chart-score" style="height:200px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ TAB 3: AI EXPLAINABILITY ═══════════════════ -->
+  <div class="tab-content" id="content-explainability">
+    <div class="explain-layout">
+
+      <!-- Pipeline Flowchart -->
+      <div class="glass-card explain-flow">
+        <h3 class="card-title">🔬 7-Layer Detection Pipeline</h3>
+        <div class="pipeline-flow">
+          <div class="pipe-step step-input">
+            <div class="pipe-icon">📡</div>
+            <div class="pipe-label">Raw AWS Reading</div>
+            <div class="pipe-sub">Temperature · Pressure · Humidity</div>
+          </div>
+          <div class="pipe-arrow">↓</div>
+          <div class="pipe-step step-rule">
+            <div class="pipe-icon">📏</div>
+            <div class="pipe-label">Layer 1 · Physical Range</div>
+            <div class="pipe-sub">−40°C to 60°C | 870–1085 hPa</div>
+          </div>
+          <div class="pipe-arrow">↓</div>
+          <div class="pipe-step step-rule">
+            <div class="pipe-icon">⚡</div>
+            <div class="pipe-label">Layer 2 · Spike Detector</div>
+            <div class="pipe-sub">Rate-of-change > physical max</div>
+          </div>
+          <div class="pipe-arrow">↓</div>
+          <div class="pipe-step step-rule">
+            <div class="pipe-icon">🥶</div>
+            <div class="pipe-label">Layer 3 · Frozen Sensor</div>
+            <div class="pipe-sub">Value unchanged for 40+ min</div>
+          </div>
+          <div class="pipe-arrow">↓</div>
+          <div class="pipe-step step-rule">
+            <div class="pipe-icon">📉</div>
+            <div class="pipe-label">Layer 4 · Drift Check</div>
+            <div class="pipe-sub">Sustained deviation from climatology</div>
+          </div>
+          <div class="pipe-arrow">↓</div>
+          <div class="pipe-step step-ml">
+            <div class="pipe-icon">🤖</div>
+            <div class="pipe-label">Layer 5 · Isolation Forest</div>
+            <div class="pipe-sub">Multivariate anomaly (7 features)</div>
+          </div>
+          <div class="pipe-arrow">↓</div>
+          <div class="pipe-step step-spatial">
+            <div class="pipe-icon">🗺️</div>
+            <div class="pipe-label">Layer 6 · Spatial Consistency</div>
+            <div class="pipe-sub">Compare Delhi / Gurgaon / Noida cluster</div>
+          </div>
+          <div class="pipe-arrow">↓</div>
+          <div class="pipe-step step-fusion">
+            <div class="pipe-icon">⚖️</div>
+            <div class="pipe-label">Layer 7 · Evidence Fusion</div>
+            <div class="pipe-sub">Weighted confidence → Severity</div>
+          </div>
+          <div class="pipe-arrow">↓</div>
+          <div class="pipe-step step-output">
+            <div class="pipe-icon">✅</div>
+            <div class="pipe-label">Auto-Correction + Alert</div>
+            <div class="pipe-sub">Corrected value sent downstream</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Explainability Panel -->
+      <div class="explain-right">
+        <div class="glass-card" style="margin-bottom:16px">
+          <h3 class="card-title">🔎 Occlusion-Based Feature Attribution</h3>
+          <p class="explain-prose">
+            When the <strong>Isolation Forest</strong> flags a reading, it returns only a score.
+            SkyGuard then asks a series of <em>"What if I remove this feature?"</em> questions —
+            measuring how much the anomaly score drops when each feature is reset to its local median.
+            A large drop = that feature is <strong>causing</strong> the anomaly.
+            No SHAP library required — edge-deployable on a Raspberry Pi.
+          </p>
+          <div id="chart-attribution" style="height:260px"></div>
+        </div>
+
+        <div class="glass-card">
+          <h3 class="card-title">📋 Worst Anomaly Breakdown</h3>
+          <div class="explain-prose" id="worst-anomaly-box">Loading...</div>
+        </div>
+
+        <div class="glass-card" style="margin-top:16px">
+          <h3 class="card-title">📈 Detection Performance</h3>
+          <div class="metrics-grid" id="metrics-grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <span>SkyGuard AI · Built with Open-Meteo real-world data · Isolation Forest + 7-Layer Rule Engine</span>
+    <span id="footer-timestamp">—</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

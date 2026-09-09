@@ -1,0 +1,6 @@
+station_id,current_anomaly_rate,health_status,estimated_days_to_maintenance,total_flagged_observations,total_observations
+AWS_JAISALMER,0.1165,"Watch - elevated anomaly rate, monitor",,377,2880
+AWS_DELHI,0.0735,"Watch - elevated anomaly rate, monitor",19.2,263,2880
+AWS_SHIMLA,0.0524,Healthy,,265,2880
+AWS_KOCHI,0.0416,Healthy,,215,2880
+AWS_BLR,0.0377,Healthy,17.9,199,2880

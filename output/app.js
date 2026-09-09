@@ -58,22 +58,23 @@ async function loadData() {
     // so this works with zero fetch() calls, zero CORS issues.
     if (window.__SKYGUARD__) {
       json = window.__SKYGUARD__;
-      // Clear it so the next poll goes through fetch (gets fresh data)
       window.__SKYGUARD__ = null;
     } else {
       // ── Fallback: poll the API ────────────────────────────
       const res = await fetch(`${API_BASE}/api/data`);
       json = await res.json();
+    }
 
-      if (res.status === 202) {
-        setStatus('initializing', '⏳ Pipeline running… ~60s');
-        g_pollTimer = setTimeout(loadData, 5000);
-        return;
-      }
-      if (!res.ok) {
-        setStatus('error', '❌ ' + (json.message || 'Server error'));
-        return;
-      }
+    // ── Handle server states ────────────────────────────────
+    if (json.status === 'initializing') {
+      setStatus('initializing', '⏳ Pipeline running… ~60s');
+      g_pollTimer = setTimeout(loadData, 5000);
+      return;
+    }
+    if (json.status === 'error') {
+      setStatus('error', '❌ ' + (json.message || json.error || 'Server error'));
+      g_pollTimer = setTimeout(loadData, 8000);
+      return;
     }
 
     // Only re-render if the data actually changed (avoid unnecessary redraws)
